@@ -1,0 +1,85 @@
+import requests
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+def fetch_coinmarketcap_data():
+    url = 'https://api.coinmarketcap.com/data-api/v3/cryptocurrency/listing?start=1&limit=100&sortBy=market_cap&sortType=desc&convert=USD&cryptoType=all&tagType=all&audited=false'
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept': 'application/json', 
+    }
+    
+    print("Fetching data from CoinMarketCap API...")
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        print(f"Error: Failed to retrieve data from the API. {e}")
+        return None
+    try:
+        json_data = response.json()
+    except ValueError:
+        print("Error: Failed to decode JSON from response.")
+        return None
+    crypto_list = json_data.get('data', {}).get('cryptoCurrencyList', [])
+    
+    if not crypto_list:
+        print("Error: Could not find cryptocurrency list in the API response.")
+        return None
+    crypto_data = []
+    for coin in crypto_list:
+        quotes = coin.get('quotes', [{}])[0] 
+        
+        crypto_data.append({
+            'Name': coin.get('name'),
+            'Symbol': coin.get('symbol'),
+            'Price': quotes.get('price'),
+            '24h % Change': quotes.get('percentChange24h'),
+            'Market Cap': quotes.get('marketCap')
+        })
+        
+    print("Data fetching complete.")
+    return pd.DataFrame(crypto_data)
+
+def visualize_data(df):
+    print("Generating visualizations...")
+    sns.set_style("whitegrid")
+    plt.figure(figsize=(15, 10)) 
+    plt.subplot(2, 2, 1)
+    top_10_mc = df.nlargest(10, 'Market Cap')
+    sns.barplot(x='Market Cap', y='Name', data=top_10_mc, palette='viridis')
+    plt.title('Top 10 Cryptocurrencies by Market Cap')
+    plt.xlabel('Market Cap (USD)')
+    plt.ylabel('')
+    plt.subplot(2, 2, 2)
+    top_10_price = df.nlargest(10, 'Price')
+    sns.barplot(x='Price', y='Name', data=top_10_price, palette='plasma')
+    plt.title('Top 10 Cryptocurrencies by Price')
+    plt.xlabel('Price (USD)')
+    plt.ylabel('')
+    plt.subplot(2, 2, 3)
+    sns.histplot(df['24h % Change'], bins=30, kde=True, color='skyblue')
+    plt.title('Distribution of 24h Price Change (%)')
+    plt.xlabel('24h % Change')
+    plt.ylabel('Number of Cryptocurrencies')
+    plt.subplot(2, 2, 4)
+    sns.scatterplot(x='Price', y='Market Cap', data=df, alpha=0.7)
+    plt.title('Price vs. Market Cap')
+    plt.xlabel('Price (USD)')
+    plt.ylabel('Market Cap (USD)')
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.tight_layout()
+    plt.show()
+    print("Visualizations displayed.")
+if __name__ == "__main__":
+    df = fetch_coinmarketcap_data()
+    if df is not None and not df.empty:
+        print("\n--- Data Sample ---")
+        print(df.head())
+        print("\n" + "="*40 + "\n")
+        visualize_data(df)
+    else:
+        print("Could not retrieve data. Exiting.")
+
